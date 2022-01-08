@@ -166,12 +166,6 @@ impl<'a> Hand<'a> {
             v
         };
 
-        let rev_order = |ranks: &[Rank]| -> Vec<Rank> {
-            let mut tmp: Vec<&Rank> = ranks.iter().collect();
-            tmp.sort();
-            tmp.into_iter().map(|x| *x).rev().collect()
-        };
-
         if Hand::is_sequential(cards) && Hand::is_all_same_suit(cards) {
             (
                 PokerHand::StraightFlush,
@@ -192,123 +186,45 @@ impl<'a> Hand<'a> {
             // Handle ace-to-five low rules
 
             let rank_dist = Hand::rank_distribution(cards);
-            let mut it = rank_dist.iter();
+            let mut counts: Vec<i32> = rank_dist.iter().map(|(_rank, &count)| count).collect::<Vec<i32>>();
+            let mut ranks: Vec<Rank> = rank_dist.iter().map(|(&rank, _count)| rank).collect::<Vec<Rank>>();
 
-            match (it.next(), it.next(), it.next(), it.next(), it.next()) {
+            println!("rank_dist: {:?}", rank_dist);
+
+            counts.sort();
+            if counts.iter().all(|x| x == &1) {
+                ranks.sort_by(|a, b| b.cmp(a));
+            } else {
+                ranks.sort_by(|a, b| (rank_dist.get(b).unwrap()).cmp(rank_dist.get(a).unwrap()));
+            }
+
+            println!("counts: {:?}", counts);
+            println!("ranks: {:?}", ranks);
+
+            match &counts[..] {
 
                 // Four of a kind: Match ranks distribution such that there are
                 // four equal ranks, and another kicker.
-                (
-                    Some((&r1, x)),
-                    Some((&r2, y)),
-                    None,
-                    None,
-                    None,
-                )
-                if (x == &4) || (y == &4) => (
-                    PokerHand::FourOfAKind,
-                    if x == &4 { vec![r1, r2] } else { vec![r2, r1] },
-                ),
+                &[1, 4] => (PokerHand::FourOfAKind, ranks),
 
                 // Full House: Match ranks distribution such that there are 3
                 // equal ranks, and another 2 equal ranks.
-                (
-                    Some((&r1, x)),
-                    Some((&r2, y)),
-                    None,
-                    None,
-                    None,
-                )
-                if (x == &3) || (y == &3) => (
-                    PokerHand::FullHouse,
-                    if x == &3 { vec![r1, r2] } else { vec![r2, r1] },
-                ),
+                &[2, 3] => (PokerHand::FullHouse, ranks),
 
                 // Three of a Kind: Match ranks distributions such that there
                 // are 3 equal ranks and other two kickers.
-                (
-                    Some((&r1, x)),
-                    Some((&r2, y)),
-                    Some((&r3, z)),
-                    None,
-                    None,
-                )
-                if (x == &3) || (y == &3) || (z == &3) => (
-                    PokerHand::ThreeOfAKind,
-                    if x == &3 {
-                        let mut it = rev_order(&vec![r2, r3][..]).into_iter();
-                        vec![r1, it.next().unwrap(), it.next().unwrap()]
-                    } else if y == &3 {
-                        let mut it = rev_order(&vec![r1, r3][..]).into_iter();
-                        vec![r2, it.next().unwrap(), it.next().unwrap()]
-                    } else {
-                        let mut it = rev_order(&vec![r1, r2][..]).into_iter();
-                        vec![r3, it.next().unwrap(), it.next().unwrap()]
-                    }
-                ),
+                &[1, 1, 3] => (PokerHand::ThreeOfAKind, ranks),
 
                 // Two Pair: Match ranks distribution such that there are two
                 // pairs of equal ranks, and one kicker.
-                (
-                    Some((&r1, x)),
-                    Some((&r2, y)),
-                    Some((&r3, z)),
-                    None,
-                    None,
-                )
-                if (z + x + y == 5) && (x == &1 || y == &1 || z == &1)  => (
-                     PokerHand::TwoPair,
-                    if x == &1 {
-                        let mut it = rev_order(&vec![r2, r3][..]).into_iter();
-                        vec![it.next().unwrap(), it.next().unwrap(), r1]
-                    } else if y == &1 {
-                        let mut it = rev_order(&vec![r1, r3][..]).into_iter();
-                        vec![it.next().unwrap(), it.next().unwrap(), r2]
-                    } else {
-                        let mut it = rev_order(&vec![r1, r2][..]).into_iter();
-                        vec![it.next().unwrap(), it.next().unwrap(), r3]
-                    }
-                ),
+                &[1, 2, 2] => (PokerHand::TwoPair, ranks),
 
                 // One Pair: Match ranks distribution such that there are one
                 // pair of equal ranks, and three other kickers.
-                (
-                    Some((&r1, x)),
-                    Some((&r2, y)),
-                    Some((&r3, z)),
-                    Some((&r4, w)),
-                    None,
-                ) if (x == &2) || (y == &2) || (z == &2) || (w == &2) => (
-                    PokerHand::OnePair,
-                    if x == &2 {
-                        let mut it = rev_order(&vec![r2, r3, r4][..]).into_iter();
-                        vec![r1, it.next().unwrap(), it.next().unwrap(), it.next().unwrap()]
-                    } else if y == &2 {
-                        let mut it = rev_order(&vec![r1, r3, r4][..]).into_iter();
-                        vec![r2, it.next().unwrap(), it.next().unwrap(), it.next().unwrap()]
-                    } else if z == &2 {
-                        let mut it = rev_order(&vec![r1, r2, r4][..]).into_iter();
-                        vec![r3, it.next().unwrap(), it.next().unwrap(), it.next().unwrap()]
-                    } else {
-                        let mut it = rev_order(&vec![r1, r2, r3][..]).into_iter();
-                        vec![r4, it.next().unwrap(), it.next().unwrap(), it.next().unwrap()]
-                    }
-                ),
-
-                // High Card
-                (
-                    Some((&r1, _)),
-                    Some((&r2, _)),
-                    Some((&r3, _)),
-                    Some((&r4, _)),
-                    Some((&r5, _)),
-                ) => (
-                    PokerHand::HighCard,
-                    rev_order(&vec![r1, r2, r3, r4, r5][..])
-                ),
+                &[1, 1, 1, 2] => (PokerHand::OnePair, ranks),
 
                 // Should be unreachable
-                _ => unreachable!()
+                _ => (PokerHand::HighCard, ranks),
             }
         }
     }
